@@ -18,6 +18,9 @@ many dag nodes, for
 Thinking of using 'shelve' which presents a dictionary of objects to save/restore, where you can restore by name
 
 '''
+
+Stored = True
+
 import shelve
 class domObj(object):
     def __init__(self):
