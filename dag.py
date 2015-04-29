@@ -19,11 +19,16 @@ Thinking of using 'shelve' which presents a dictionary of objects to save/restor
 
 '''
 
+#need to work out bit/xor flag etc.
 Stored = True
+CanSet = True 
 
+import inspect
+import ast  
 import shelve
+
 class domObj(object):
-    def __init__(self):
+    def __init__(self):s
         pass
     def override(self, meth, newval):
         if dagNode.dagnodes.has_key(meth):
@@ -74,7 +79,7 @@ class dagNode(object):
 # Decorator for DAG methods (methods which are evaluated on/by DAG)
 # intercepts method invocations on DOM object instances and returns cached node value if valid 
 # else evaluates non-valid precedents and then evaluates self  
-def dagMethod(f):
+def dagMethod(method):
     def dagmethwrapper(self):
         if self.dagnode and self.dagnode.valid:
             return self.dagnode.cached_value
@@ -83,7 +88,7 @@ def dagMethod(f):
             # evaluate self
             pass
         elif self.dagnode == None:
-            pass
+            self.dagnode = dagNode(method)
             # build the node for this method for "self"
         
-    
+#TODO rewrite for attribute params (i.e test for callabaility )    
