@@ -7,7 +7,8 @@ enabling
 
 domObj - metaclass which creates behaviours for DOM object instances to enable them to have DAG experiences. 
 Any object to be instantiated on DAG must inherit from domObj
--
+-DOM objects will be business objects in the business domain; pretty much everything from trades, 
+instruments, books, portfolios, market data,...
 
 Notes:
 1 dag nodes will map to method objects of DOM object instances; in other words an instance of a DOM object will potentially have
