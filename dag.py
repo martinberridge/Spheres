@@ -23,6 +23,7 @@ from networkx import DiGraph
 import networkx as nx
 import inspect
 import functools
+
 class DagMethod(object):
 
 # valid - we don't need to recalculate
