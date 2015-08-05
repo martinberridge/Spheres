@@ -103,7 +103,7 @@ class DagMethod(object):
 
             self.function_names[self.method.func_name]  = self.partial
 
-            if calling_function != 'main':
+            if calling_function not in ( 'main','<module>' ) :
                 caller_partial = self.function_names[calling_function]
                 if not obj.dag.has_edge(caller_partial, self.partial) :
                     self.dag.add_edge(self.partial, caller_partial)
