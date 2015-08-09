@@ -53,20 +53,20 @@ class DagMethod(object):
         if self.valid:
            return self.value
         else :
-  #         logging.info("recalculating %s"%self.method.func_name)
-           print ">>recalculating %s<<"%self.method.func_name
+#           print ">>recalculating %s<<"%self.method.func_name
            self.value = self.method(*args  )
            self.valid = True
            return self.value
 
 # force recalculation of DagMethod and delete cached value . Think about implementing as @property?
     def invalidate(self):
-        print ">>invalidating %s<<"%self.method.func_name
+#        print ">>invalidating %s<<"%self.method.func_name
         self.valid = False
         self.value = None
         self.notify_downlinks(self.partial)
 
-
+    def is_valid(self):
+        return  self.valid
 #  overrides value returned by DagMethod. call invalidate to get original value by forcing recalculation
     def set_value(self, val):
         self.value = val
@@ -100,13 +100,18 @@ class DagMethod(object):
             self.partial = functools.partial(self.__call__, obj)
             self.partial.invalidate = self.invalidate
             self.partial.set_value = self.set_value
+            self.partial.is_valid = self.is_valid
 
             self.function_names[self.method.func_name]  = self.partial
+
+            if calling_function.startswith('test_'): # kludge for unit testing
+                calling_function = 'main'
 
             if calling_function not in ( 'main','<module>' ) :
                 caller_partial = self.function_names[calling_function]
                 if not obj.dag.has_edge(caller_partial, self.partial) :
                     self.dag.add_edge(self.partial, caller_partial)
+
 
         return self.partial
 
