@@ -3,6 +3,7 @@ __author__ = 'martin berridge'
 
 
 from dag import DagMethod, DomainObj
+import graphfunctions
 
 class Greeter(DomainObj):
     @DagMethod
@@ -39,6 +40,21 @@ def main():
     g.bonjour.invalidate()
     print g.greeting()
 
+    #tweaks in outer context german
+    #tweaks in inner context japanese
+    with graphfunctions.context():
+        graphfunctions.tweak(g.bonjour, "guten tag")
+        with graphfunctions.context():
+            graphfunctions.tweak(g.tout, " minna samma ")
+            #in inner context tout() tweaked to japanese
+            print "inner tweaks %s " % g.greeting()
+        #in outer context tout reverts to french but bonjour stays tweeked to german
+        print "outer tweaks %s  " % g.greeting()
+
+
+
+    #out of all context all tweaks revert to french
+    print "out of context %s" % g.greeting()
 
 if __name__ == '__main__':
     main()
