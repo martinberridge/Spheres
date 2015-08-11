@@ -50,6 +50,8 @@ class DagMethod(object):
 # and https://docs.python.org/2/reference/datamodel.html#object.__call__
 
     def __call__(self,*args):
+
+
         if self.valid:
            return self.value
         else :
@@ -84,32 +86,33 @@ class DagMethod(object):
 # gets calling function from stack vi inspect. Calling function is dependent on this function so function and calling function
 # form an edge in a Directed Acyclic Graph, this is built up as function as called, on-demand.
 
-    def __get__(self, obj, objtype):
+    def __get__(self, dom_obj, objtype):
 
-        if self.dag is None :
-            self.dag  = obj.dag
+       #if self.dag is None :
+        self.dag  = dom_obj.dag
 
-        if self.function_names is None :
-            self.function_names =  obj.function_names
+      #  if self.function_names is None :
+        self.function_names =  dom_obj.function_names
+
+
+        a_stack = inspect.stack()
+        calling_function = a_stack[1][3]
 
         if self.partial is None :
 
-            a_stack = inspect.stack()
-            calling_function = a_stack[1][3]
-
-            self.partial = functools.partial(self.__call__, obj)
+            self.partial = functools.partial(self.__call__, dom_obj)
             self.partial.invalidate = self.invalidate
             self.partial.set_value = self.set_value
             self.partial.is_valid = self.is_valid
 
             self.function_names[self.method.func_name]  = self.partial
 
-            if calling_function.startswith('test_'): # kludge for unit testing
+        if calling_function.startswith('test_'): # kludge for unit testing
                 calling_function = 'main'
 
-            if calling_function not in ( 'main','<module>' ) :
+        if calling_function not in ( 'main','<module>' ) :
                 caller_partial = self.function_names[calling_function]
-                if not obj.dag.has_edge(caller_partial, self.partial) :
+                if not dom_obj.dag.has_edge(caller_partial, self.partial) :
                     self.dag.add_edge(self.partial, caller_partial)
 
 
