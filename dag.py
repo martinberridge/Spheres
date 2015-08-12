@@ -26,6 +26,7 @@ import functools
 
 class DagMethod(object):
 
+# TODO - cleanup?
 # valid - we don't need to recalculate
 # value - cached return value
 # method - function object to be wrapped
@@ -65,7 +66,7 @@ class DagMethod(object):
 #        print ">>invalidating %s<<"%self.method.func_name
         self.valid = False
         self.value = None
-        self.notify_downlinks(self.partial)
+        self.notify_dependent_nodes(self.partial)
 
     def is_valid(self):
         return  self.valid
@@ -73,12 +74,13 @@ class DagMethod(object):
     def set_value(self, val):
         self.value = val
         self.valid = True
-        self.notify_downlinks(self.partial)
+        self.notify_dependent_nodes(self.partial)
 
 # find dependent DagMethods which need to be recalculated when they called.
-    def notify_downlinks (self, node):
-        downlinks = nx.descendants(self.dag, node)
-        for n in downlinks: n.invalidate()
+    def notify_dependent_nodes (self, node):
+        if  self.dag.nodes():
+            dependents = nx.descendants(self.dag, node)
+            for n in dependents : n.invalidate()
 
 # faking a method call so do this in two stages - intercept the function call and return  function object
 # which is a partial (wraps a function, simplifies signature ) "monkey patched" with methods to override and invalidate cache
@@ -110,6 +112,10 @@ class DagMethod(object):
         if calling_function.startswith('test_'): # kludge for unit testing
                 calling_function = 'main'
 
+        if calling_function in ('setUp','tearDown'): # kludge for unit testing
+                calling_function = 'main'
+
+
         if calling_function not in ( 'main','<module>' ) :
                 caller_partial = self.function_names[calling_function]
                 if not dom_obj.dag.has_edge(caller_partial, self.partial) :
@@ -121,7 +127,8 @@ class DagMethod(object):
 
 
 class DomainObj(object):
-   dag = DiGraph()
-   function_names = {}
+    def __init__(self):
+        self.dag = DiGraph()
+        self.function_names = {}
 
 
