@@ -15,7 +15,9 @@ DagMethod - decorator class that wrap members of a class derived from DomObject 
 
 DomObject - base class for any class that has DagMethod methods. Maintains the DAG which implements the dependency graph of DagMethod
 
-TODO usage examples
+TODO -  usage examples
+     -  get update
+
 """
 
 
@@ -23,6 +25,14 @@ from networkx import DiGraph
 import networkx as nx
 import inspect
 import functools
+
+from client import GephiClient
+
+
+gephi = None
+node_attributes = {"size":50, 'r':1.0, 'g':0.0, 'b':0.0, 'x':1}
+node_count = 0
+
 
 class DagMethod(object):
 
@@ -44,22 +54,67 @@ class DagMethod(object):
 
 
     def __init__(self, a_dag_method) :
-        self.method = a_dag_method
+        global gephi
 
+        try:
+            if gephi is None :
+                global node_count
+                node_count += 1
+                gephi = GephiClient('http://localhost:8080/workspace0', autoflush=True)
+                gephi.clean()
+        except :
+                print "Gephi Not Running"
+        finally:
+            self.method = a_dag_method
+            self.plot_node(self.method.func_name)
 # intercepts method call to implement lazy evaluation.
 # see http://www.rafekettler.com/magicmethods.html which is the best guide to __???__ methods (i.e. magic methods) in python
 # and https://docs.python.org/2/reference/datamodel.html#object.__call__
 
+# ---------------------------- gephi wrappers -----------------------------------------
+
+    def plot_node(self,name):
+        if gephi:
+            global node_attributes, node_count
+            node_attributes['y'] = node_count
+            node_attributes['label'] = name
+            node_count += 1
+            gephi.add_node(name, **node_attributes)
+
+    # def plot_value(self):
+    #     if gephi:
+    #         global node_attributes
+    #         node_attributes['label'] = self.method.func_name + ":" + str(self.value)
+    #         gephi.change_node(self.method.func_name, **node_attributes )
+    #     print ">>plotting " + self.method.func_name + ":" + str(self.value) + "<<"
+
+    def plot_dag_edge(self,caller,callee):
+        if gephi:
+            gephi.add_edge(caller, caller,callee)
+
+    def update_dag_node_plot(self):
+        if gephi:
+            node_attributes['r'] = 0.0 if self.valid else 1.0
+            node_attributes['g'] = 0.5 if self.valid else 0.0
+            node_attributes['b'] = 0.5 if self.valid else 0.0
+
+            node_attributes['label'] = self.method.func_name + "():\r" + str(self.value)
+
+            gephi.change_node(self.method.func_name, **node_attributes )
+
+# --------------------------------------------------------------------------------------
+
     def __call__(self,*args):
 
-
-        if self.valid:
-           return self.value
-        else :
+        if not self.valid:
 #           print ">>recalculating %s<<"%self.method.func_name
            self.value = self.method(*args  )
            self.valid = True
-           return self.value
+
+        # self.plot_value()
+        # self.plot_dag_node_state()
+        self.update_dag_node_plot()
+        return self.value
 
 # force recalculation of DagMethod and delete cached value . Think about implementing as @property?
     def invalidate(self):
@@ -67,13 +122,17 @@ class DagMethod(object):
         self.valid = False
         self.value = None
         self.notify_dependent_nodes(self.partial)
+        self.update_dag_node_plot()
 
     def is_valid(self):
         return  self.valid
+
 #  overrides value returned by DagMethod. call invalidate to get original value by forcing recalculation
     def set_value(self, val):
         self.value = val
         self.valid = True
+
+        self.update_dag_node_plot()
         self.notify_dependent_nodes(self.partial)
 
 # find dependent DagMethods which need to be recalculated when they called.
@@ -100,6 +159,8 @@ class DagMethod(object):
         a_stack = inspect.stack()
         calling_function = a_stack[1][3]
 
+#       create a standalone function object that holds state: ie can be validated/invalidated, holds cached value
+#       bound to
         if self.partial is None :
 
             self.partial = functools.partial(self.__call__, dom_obj)
@@ -115,10 +176,10 @@ class DagMethod(object):
         if calling_function in ('setUp','tearDown'): # kludge for unit testing
                 calling_function = 'main'
 
-
         if calling_function not in ( 'main','<module>' ) :
                 caller_partial = self.function_names[calling_function]
                 if not dom_obj.dag.has_edge(caller_partial, self.partial) :
+                    self.plot_dag_edge(self.method.func_name, calling_function)
                     self.dag.add_edge(self.partial, caller_partial)
 
 
