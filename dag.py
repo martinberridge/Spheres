@@ -67,9 +67,7 @@ class DagMethod(object):
         finally:
             self.method = a_dag_method
             self.plot_node(self.method.func_name)
-# intercepts method call to implement lazy evaluation.
-# see http://www.rafekettler.com/magicmethods.html which is the best guide to __???__ methods (i.e. magic methods) in python
-# and https://docs.python.org/2/reference/datamodel.html#object.__call__
+
 
 # ---------------------------- gephi wrappers -----------------------------------------
 
@@ -81,12 +79,6 @@ class DagMethod(object):
             node_count += 1
             gephi.add_node(name, **node_attributes)
 
-    # def plot_value(self):
-    #     if gephi:
-    #         global node_attributes
-    #         node_attributes['label'] = self.method.func_name + ":" + str(self.value)
-    #         gephi.change_node(self.method.func_name, **node_attributes )
-    #     print ">>plotting " + self.method.func_name + ":" + str(self.value) + "<<"
 
     def plot_dag_edge(self,caller,callee):
         if gephi:
@@ -103,6 +95,9 @@ class DagMethod(object):
             gephi.change_node(self.method.func_name, **node_attributes )
 
 # --------------------------------------------------------------------------------------
+# intercepts method call to implement lazy evaluation.
+# see http://www.rafekettler.com/magicmethods.html which is the best guide to __???__ methods (i.e. magic methods) in python
+# and https://docs.python.org/2/reference/datamodel.html#object.__call__
 
     def __call__(self,*args):
 
