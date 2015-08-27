@@ -30,9 +30,11 @@ from client import GephiClient
 
 
 gephi = None
-node_attributes = {"size":50, 'r':1.0, 'g':0.0, 'b':0.0, 'x':1}
+node_attributes = {"size":50, 'r':1.0, 'g':0.0, 'b':0.0, 'x':1,'y':0, 'fixed':True  }
 node_count = 0
-
+edge_count = 0
+x = 0
+y = 0
 
 class DagMethod(object):
 
@@ -59,7 +61,6 @@ class DagMethod(object):
         try:
             if gephi is None :
                 global node_count
-                node_count += 1
                 gephi = GephiClient('http://localhost:8080/workspace0', autoflush=True)
                 gephi.clean()
         except :
@@ -72,17 +73,31 @@ class DagMethod(object):
 # ---------------------------- gephi wrappers -----------------------------------------
 
     def plot_node(self,name):
+
         if gephi:
-            global node_attributes, node_count
-            node_attributes['y'] = node_count
+
+            global node_attributes, node_count,x,y
+            self.x = x
+            self.y = y
             node_attributes['label'] = name
-            node_count += 1
+
+            node_attributes['x'] = x
+            node_attributes['y'] = y
             gephi.add_node(name, **node_attributes)
+            x += 0 if (node_count%2) > 0 else  -200 if (node_count%3) > 2 else 200
+            y += 0 if ((node_count+1)%2) > 1 else  -200 if ((node_count+1)%6) > 3 else 200
+    #        node_attributes['x'] += 200
+    #        node_attributes['x'] +=  0 if (node_count%4) > 1 else  -200 if (node_count%6) > 3 else 200
+#            node_attributes['y'] +=  0 if ((node_count+4)%4) > 1 else  -200 if ((node_count+4)%6) > 3 else 200
+ #          "0" if (i%4) > 1 else "-" if (i%6) >  3 else "+"
+ #          node_attributes['y'] = ( node_count % 2 ) + 100
+            node_count += 1
 
 
-    def plot_dag_edge(self,caller,callee):
+
+    def plot_dag_edge(self,id,caller,callee):
         if gephi:
-            gephi.add_edge(caller, caller,callee)
+            gephi.add_edge(id,caller, callee)
 
     def update_dag_node_plot(self):
         if gephi:
@@ -91,6 +106,10 @@ class DagMethod(object):
             node_attributes['b'] = 0.5 if self.valid else 0.0
 
             node_attributes['label'] = self.method.func_name + "():\r" + str(self.value)
+            node_attributes['fixed'] = True
+            node_attributes['x'] = self.x
+            node_attributes['y'] = self.y
+
 
             gephi.change_node(self.method.func_name, **node_attributes )
 
@@ -174,8 +193,10 @@ class DagMethod(object):
         if calling_function not in ( 'main','<module>' ) :
                 caller_partial = self.function_names[calling_function]
                 if not dom_obj.dag.has_edge(caller_partial, self.partial) :
-                    self.plot_dag_edge(self.method.func_name, calling_function)
+                    global edge_count
+                    self.plot_dag_edge(edge_count,self.method.func_name, calling_function)
                     self.dag.add_edge(self.partial, caller_partial)
+                    edge_count += 1
 
 
         return self.partial
@@ -186,5 +207,4 @@ class DomainObj(object):
     def __init__(self):
         self.dag = DiGraph()
         self.function_names = {}
-
 
