@@ -1,5 +1,6 @@
 __author__ = 'martin berridge & john barclay'
 
+
 """
 Framework for excel-style lazy evaluation of class methods - DagMethod
 For compute efficiency, we can follow lazy evaluation similar to "memoization" when values are cached and are only recalculated when invalidated.
@@ -26,11 +27,52 @@ import networkx as nx
 import inspect
 import functools
 import visualize
+import urllib2
 
 from client import GephiClient
 
 
 
+
+def calculate_plot_coordinates():
+    visualize.x += 0 if (visualize.node_count % 2) > 0 else  -200 if (visualize.node_count % 3) > 2 else 200
+    visualize.y += 0 if ((visualize.node_count + 1) % 2) > 1 else  -200 if ((visualize.node_count + 1) % 6) > 3 else 200
+
+
+def plot_node(x, y ,name):
+
+    if visualize.gephi and visualize.plot:
+
+        visualize.node_attributes['label'] = name
+        visualize.node_attributes['x'] = visualize.x
+        visualize.node_attributes['y'] = visualize.y
+        visualize.gephi.add_node(name, **visualize.node_attributes)
+
+        calculate_plot_coordinates()
+
+
+        visualize.node_count += 1
+
+def update_dag_node_plot(valid, function_name, x, y, value ):
+
+        if visualize.gephi and visualize.plot:
+            visualize.node_attributes['r'] = 0.0 if valid else 1.0
+            visualize.node_attributes['g'] = 0.5 if valid else 0.0
+            visualize.node_attributes['b'] = 0.5 if valid else 0.0
+
+            visualize.node_attributes['label'] = function_name + "():\r" + str(value)
+            visualize.node_attributes['fixed'] = True
+            visualize.node_attributes['x'] = x
+            visualize.node_attributes['y'] = y
+
+            visualize.gephi.change_node(function_name, **visualize.node_attributes )
+
+
+
+def plot_dag_edge(id,caller,callee):
+
+    if visualize.gephi and visualize.plot:
+        visualize.gephi.add_edge(id,caller, callee)
 
 
 class DagMethod(object):
@@ -50,7 +92,7 @@ class DagMethod(object):
     partial = None
     dag = None
     function_names = None
-
+    x,y = 0 ,0
 
     def __init__(self, a_dag_method) :
 
@@ -58,59 +100,23 @@ class DagMethod(object):
             if visualize.gephi is None and visualize.plot :
                 visualize.gephi = GephiClient('http://localhost:8080/workspace0', autoflush=True)
                 visualize.gephi.clean()
-        except :
-                print "Gephi Not Running"
+        except urllib2.URLError :
+                print "Gephi Not Running "
         finally:
             self.method = a_dag_method
             if visualize.gephi and visualize.plot:
-                self.plot_node(self.method.func_name)
+                self.x = visualize.x
+                self.y = visualize.y
+                plot_node(self.x, self.y, self.method.func_name)
 
 
 # ---------------------------- gephi wrappers -----------------------------------------
 
-    def plot_node(self,name):
-
-        if visualize.gephi and visualize.plot:
-
-            self.x = visualize.x
-            self.y = visualize.y
-            visualize.node_attributes['label'] = name
-
-            visualize.node_attributes['x'] = visualize.x
-            visualize.node_attributes['y'] = visualize.y
-            visualize.gephi.add_node(name, **visualize.node_attributes)
-            visualize.x += 0 if (visualize.node_count%2) > 0 else  -200 if (visualize.node_count%3) > 2 else 200
-            visualize.y += 0 if ((visualize.node_count+1)%2) > 1 else  -200 if ((visualize.node_count+1)%6) > 3 else 200
-    #        node_attributes['x'] += 200
-    #        node_attributes['x'] +=  0 if (node_count%4) > 1 else  -200 if (node_count%6) > 3 else 200
-#            node_attributes['y'] +=  0 if ((node_count+4)%4) > 1 else  -200 if ((node_count+4)%6) > 3 else 200
- #          "0" if (i%4) > 1 else "-" if (i%6) >  3 else "+"
- #          node_attributes['y'] = ( node_count % 2 ) + 100
-            visualize.node_count += 1
 
 
 
-    def plot_dag_edge(self,id,caller,callee):
 
 
-        if visualize.gephi and visualize.plot:
-            visualize.gephi.add_edge(id,caller, callee)
-
-    def update_dag_node_plot(self):
-
-
-        if visualize.gephi and visualize.plot:
-            visualize.node_attributes['r'] = 0.0 if self.valid else 1.0
-            visualize.node_attributes['g'] = 0.5 if self.valid else 0.0
-            visualize.node_attributes['b'] = 0.5 if self.valid else 0.0
-
-            visualize.node_attributes['label'] = self.method.func_name + "():\r" + str(self.value)
-            visualize.node_attributes['fixed'] = True
-            visualize.node_attributes['x'] = self.x
-            visualize.node_attributes['y'] = self.y
-
-
-            visualize.gephi.change_node(self.method.func_name, **visualize.node_attributes )
 
 # --------------------------------------------------------------------------------------
 # intercepts method call to implement lazy evaluation.
@@ -126,7 +132,7 @@ class DagMethod(object):
 
         # self.plot_value()
         # self.plot_dag_node_state()
-        self.update_dag_node_plot()
+        update_dag_node_plot(self.valid, self.method.func_name, 1, 1, self.value )
         return self.value
 
 # force recalculation of DagMethod and delete cached value . Think about implementing as @property?
@@ -135,7 +141,7 @@ class DagMethod(object):
         self.valid = False
         self.value = None
         self.notify_dependent_nodes(self.partial)
-        self.update_dag_node_plot()
+        update_dag_node_plot(self.valid, self.method.func_name, self.x, self.y, self.value )
 
     def is_valid(self):
         return  self.valid
@@ -145,7 +151,7 @@ class DagMethod(object):
         self.value = val
         self.valid = True
 
-        self.update_dag_node_plot()
+        update_dag_node_plot(self.valid, self.method.func_name, self.x, self.y, self.value )
         self.notify_dependent_nodes(self.partial)
 
 # find dependent DagMethods which need to be recalculated when they called.
@@ -192,7 +198,7 @@ class DagMethod(object):
         if calling_function not in ( 'main','<module>' ) :
                 caller_partial = self.function_names[calling_function]
                 if not dom_obj.dag.has_edge(caller_partial, self.partial) :
-                    self.plot_dag_edge(visualize.edge_count,self.method.func_name, calling_function)
+                    plot_dag_edge(visualize.edge_count,self.method.func_name, calling_function)
                     self.dag.add_edge(self.partial, caller_partial)
                     visualize.edge_count += 1
 
