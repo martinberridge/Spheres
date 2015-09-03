@@ -1,5 +1,9 @@
 __author__ = 'martin'
 
+import urllib2
+
+from client import GephiClient
+
 
 plot = False
 
@@ -10,6 +14,18 @@ edge_count = 0
 x = 0
 y = 0
 
+
+def enable():
+    global gephi,plot
+    if gephi is None:
+        try:
+            gephi = GephiClient('http://localhost:8080/workspace0', autoflush=True)
+            gephi.clean()
+
+        except urllib2.URLError:
+            print "Gephi Not Running"
+
+    plot = True
 
 
 def update_dag_node_plot(valid, function_name, x, y, value ):
