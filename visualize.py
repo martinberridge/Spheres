@@ -27,7 +27,6 @@ def enable():
 
     plot = True
 
-
 def update_dag_node_plot(valid, function_name, x, y, value ):
 
         if gephi and plot:
