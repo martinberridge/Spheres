@@ -27,10 +27,6 @@ import networkx as nx
 import inspect
 import functools
 import visualize
-import urllib2
-
-from client import GephiClient
-
 
 def is_at_top_of_call_stack(calling_function):
 
@@ -58,16 +54,8 @@ class DagMethod(object):
     x,y = 0 ,0
 
     def __init__(self, a_dag_method) :
-
-        try:
-            if visualize.gephi is None and visualize.plot :
-                visualize.gephi = GephiClient('http://localhost:8080/workspace0', autoflush=True)
-                visualize.gephi.clean()
-        except urllib2.URLError :
-                print "Gephi Not Running "
-        finally:
-            self.method = a_dag_method
-            if visualize.gephi and visualize.plot:
+           self.method = a_dag_method
+           if visualize.gephi and visualize.plot:
                 self.x = visualize.x
                 self.y = visualize.y
                 visualize.plot_node(self.x, self.y, self.method.func_name)
@@ -81,7 +69,7 @@ class DagMethod(object):
         if not self.valid:
            self.value = self.method(*args  )
            self.valid = True
-        visualize.update_dag_node_plot(self.valid, self.method.func_name, 1, 1, self.value )
+        visualize.update_dag_node_plot(self.valid, self.method.func_name, self.x, self.y, self.value )
         return self.value
 
 # force recalculation of DagMethod and delete cached value . Think about implementing as @property?
