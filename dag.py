@@ -32,47 +32,10 @@ import urllib2
 from client import GephiClient
 
 
+def is_at_top_of_call_stack(calling_function):
 
-
-def calculate_plot_coordinates():
-    visualize.x += 0 if (visualize.node_count % 2) > 0 else  -200 if (visualize.node_count % 3) > 2 else 200
-    visualize.y += 0 if ((visualize.node_count + 1) % 2) > 1 else  -200 if ((visualize.node_count + 1) % 6) > 3 else 200
-
-
-def plot_node(x, y ,name):
-
-    if visualize.gephi and visualize.plot:
-
-        visualize.node_attributes['label'] = name
-        visualize.node_attributes['x'] = visualize.x
-        visualize.node_attributes['y'] = visualize.y
-        visualize.gephi.add_node(name, **visualize.node_attributes)
-
-        calculate_plot_coordinates()
-
-
-        visualize.node_count += 1
-
-def update_dag_node_plot(valid, function_name, x, y, value ):
-
-        if visualize.gephi and visualize.plot:
-            visualize.node_attributes['r'] = 0.0 if valid else 1.0
-            visualize.node_attributes['g'] = 0.5 if valid else 0.0
-            visualize.node_attributes['b'] = 0.5 if valid else 0.0
-
-            visualize.node_attributes['label'] = function_name + "():\r" + str(value)
-            visualize.node_attributes['fixed'] = True
-            visualize.node_attributes['x'] = x
-            visualize.node_attributes['y'] = y
-
-            visualize.gephi.change_node(function_name, **visualize.node_attributes )
-
-
-
-def plot_dag_edge(id,caller,callee):
-
-    if visualize.gephi and visualize.plot:
-        visualize.gephi.add_edge(id,caller, callee)
+        return calling_function in ('main','<module>','setUp','tearDown') or  \
+               calling_function.startswith('test_')
 
 
 class DagMethod(object):
@@ -107,17 +70,7 @@ class DagMethod(object):
             if visualize.gephi and visualize.plot:
                 self.x = visualize.x
                 self.y = visualize.y
-                plot_node(self.x, self.y, self.method.func_name)
-
-
-# ---------------------------- gephi wrappers -----------------------------------------
-
-
-
-
-
-
-
+                visualize.plot_node(self.x, self.y, self.method.func_name)
 # --------------------------------------------------------------------------------------
 # intercepts method call to implement lazy evaluation.
 # see http://www.rafekettler.com/magicmethods.html which is the best guide to __???__ methods (i.e. magic methods) in python
@@ -126,22 +79,17 @@ class DagMethod(object):
     def __call__(self,*args):
 
         if not self.valid:
-#           print ">>recalculating %s<<"%self.method.func_name
            self.value = self.method(*args  )
            self.valid = True
-
-        # self.plot_value()
-        # self.plot_dag_node_state()
-        update_dag_node_plot(self.valid, self.method.func_name, 1, 1, self.value )
+        visualize.update_dag_node_plot(self.valid, self.method.func_name, 1, 1, self.value )
         return self.value
 
 # force recalculation of DagMethod and delete cached value . Think about implementing as @property?
     def invalidate(self):
-#        print ">>invalidating %s<<"%self.method.func_name
         self.valid = False
         self.value = None
         self.notify_dependent_nodes(self.partial)
-        update_dag_node_plot(self.valid, self.method.func_name, self.x, self.y, self.value )
+        visualize.update_dag_node_plot(self.valid, self.method.func_name, self.x, self.y, self.value )
 
     def is_valid(self):
         return  self.valid
@@ -151,7 +99,7 @@ class DagMethod(object):
         self.value = val
         self.valid = True
 
-        update_dag_node_plot(self.valid, self.method.func_name, self.x, self.y, self.value )
+        visualize.update_dag_node_plot(self.valid, self.method.func_name, self.x, self.y, self.value )
         self.notify_dependent_nodes(self.partial)
 
 # find dependent DagMethods which need to be recalculated when they called.
@@ -174,7 +122,6 @@ class DagMethod(object):
       #  if self.function_names is None :
         self.function_names =  dom_obj.function_names
 
-
         a_stack = inspect.stack()
         calling_function = a_stack[1][3]
 
@@ -189,23 +136,16 @@ class DagMethod(object):
 
             self.function_names[self.method.func_name]  = self.partial
 
-        if calling_function.startswith('test_'): # kludge for unit testing
-                calling_function = 'main'
 
-        if calling_function in ('setUp','tearDown'): # kludge for unit testing
-                calling_function = 'main'
+        if not is_at_top_of_call_stack(calling_function):
 
-        if calling_function not in ( 'main','<module>' ) :
                 caller_partial = self.function_names[calling_function]
                 if not dom_obj.dag.has_edge(caller_partial, self.partial) :
-                    plot_dag_edge(visualize.edge_count,self.method.func_name, calling_function)
+                    visualize.plot_dag_edge(visualize.edge_count,self.method.func_name, calling_function)
                     self.dag.add_edge(self.partial, caller_partial)
                     visualize.edge_count += 1
 
-
         return self.partial
-
-
 
 class DomainObj(object):
     def __init__(self):
