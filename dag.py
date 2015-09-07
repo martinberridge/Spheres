@@ -40,7 +40,7 @@ class DagMethod(object):
 # valid - we don't need to recalculate
 # value - cached return value
 # method - function object to be wrapped
-# partial - functools partial function object which wraps method see __call__ and __get__
+# compute_node - functools compute_node function object which wraps method see __call__ and __get__
 # dag - reference to DAG maintained by DomObject
 # function_names - reference to dictionary maintained by DomObject used for parsing method calls and building DAG see __call__ and __get__
 
@@ -48,7 +48,7 @@ class DagMethod(object):
     valid = False
     value = None
     method = None
-    partial = None
+    compute_node = None
     dag = None
     function_names = None
     x,y = 0 ,0
@@ -76,7 +76,7 @@ class DagMethod(object):
     def invalidate(self):
         self.valid = False
         self.value = None
-        self.notify_dependent_nodes(self.partial)
+        self.notify_dependent_nodes(self.compute_node)
         visualize.update_dag_node_plot(self.valid, self.method.func_name, self.x, self.y, self.value )
 
     def is_valid(self):
@@ -88,7 +88,7 @@ class DagMethod(object):
         self.valid = True
 
         visualize.update_dag_node_plot(self.valid, self.method.func_name, self.x, self.y, self.value )
-        self.notify_dependent_nodes(self.partial)
+        self.notify_dependent_nodes(self.compute_node)
 
 # find dependent DagMethods which need to be recalculated when they called.
     def notify_dependent_nodes (self, node):
@@ -97,7 +97,7 @@ class DagMethod(object):
             for n in dependents : n.invalidate()
 
 # faking a method call so do this in two stages - intercept the function call and return  function object
-# which is a partial (wraps a function, simplifies signature ) "monkey patched" with methods to override and invalidate cache
+# which is a compute_node (wraps a function, simplifies signature ) "monkey patched" with methods to override and invalidate cache
 # gets references to function name dictionary and dag from calling class
 # gets calling function from stack vi inspect. Calling function is dependent on this function so function and calling function
 # form an edge in a Directed Acyclic Graph, this is built up as function as called, on-demand.
@@ -115,25 +115,25 @@ class DagMethod(object):
 
 #       create a standalone function object that holds state: ie can be validated/invalidated, holds cached value
 #       bound to
-        if self.partial is None :
+        if self.compute_node is None :
 
-            self.partial = functools.partial(self.__call__, dom_obj)
-            self.partial.invalidate = self.invalidate
-            self.partial.set_value = self.set_value
-            self.partial.is_valid = self.is_valid
+            self.compute_node = functools.partial(self.__call__, dom_obj)
+            self.compute_node.invalidate = self.invalidate
+            self.compute_node.set_value = self.set_value
+            self.compute_node.is_valid = self.is_valid
 
-            self.function_names[self.method.func_name]  = self.partial
+            self.function_names[self.method.func_name]  = self.compute_node
 
 
         if not is_at_top_of_call_stack(calling_function):
 
-                caller_partial = self.function_names[calling_function]
-                if not dom_obj.dag.has_edge(caller_partial, self.partial) :
+                calling_compute_node = self.function_names[calling_function]
+                if not dom_obj.dag.has_edge(calling_compute_node, self.compute_node) :
                     visualize.plot_dag_edge(visualize.edge_count,self.method.func_name, calling_function)
-                    self.dag.add_edge(self.partial, caller_partial)
+                    self.dag.add_edge(self.compute_node, calling_compute_node)
                     visualize.edge_count += 1
 
-        return self.partial
+        return self.compute_node
 
 class DomainObj(object):
     def __init__(self):
