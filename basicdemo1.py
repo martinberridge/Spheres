@@ -5,6 +5,10 @@ __author__ = 'martin berridge'
 from dag import DagMethod, DomainObj
 import graphfunctions
 
+import visualize
+
+visualize.enable() #comment out this line to disable graphing
+
 class Greeter(DomainObj):
     @DagMethod
     def bonjour(self):
@@ -26,9 +30,9 @@ class Greeter(DomainObj):
 
 def main():
     g = Greeter()
-
     # all DagMethods invalid - recalculated
     print g.greeting()
+
     # call DagMethods valid - return cached values only
     print g.greeting()
 
