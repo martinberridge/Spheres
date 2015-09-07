@@ -27,6 +27,11 @@ import networkx as nx
 import inspect
 import functools
 import visualize
+import itertools
+
+
+method_name_node_map = {}
+dependency_graph = DiGraph()
 
 def is_at_top_of_call_stack(calling_function):
 
@@ -36,12 +41,11 @@ def is_at_top_of_call_stack(calling_function):
 
 class DagMethod(object):
 
-# TODO - cleanup?
 # valid - we don't need to recalculate
 # value - cached return value
 # method - function object to be wrapped
 # compute_node - functools compute_node function object which wraps method see __call__ and __get__
-# dag - reference to DAG maintained by DomObject
+# dependency_graph - reference to DAG maintained by DomObject
 # function_names - reference to dictionary maintained by DomObject used for parsing method calls and building DAG see __call__ and __get__
 
 
@@ -49,8 +53,6 @@ class DagMethod(object):
     value = None
     method = None
     compute_node = None
-    dag = None
-    function_names = None
     x,y = 0 ,0
 
     def __init__(self, a_dag_method) :
@@ -63,6 +65,7 @@ class DagMethod(object):
 # intercepts method call to implement lazy evaluation.
 # see http://www.rafekettler.com/magicmethods.html which is the best guide to __???__ methods (i.e. magic methods) in python
 # and https://docs.python.org/2/reference/datamodel.html#object.__call__
+# --------------------------------------------------------------------------------------
 
     def __call__(self,*args):
 
@@ -92,26 +95,22 @@ class DagMethod(object):
 
 # find dependent DagMethods which need to be recalculated when they called.
     def notify_dependent_nodes (self, node):
-        if  self.dag.nodes():
-            dependents = nx.descendants(self.dag, node)
+        if  dependency_graph.nodes():
+            dependents = nx.descendants(dependency_graph, node)
             for n in dependents : n.invalidate()
+
 
 # faking a method call so do this in two stages - intercept the function call and return  function object
 # which is a compute_node (wraps a function, simplifies signature ) "monkey patched" with methods to override and invalidate cache
-# gets references to function name dictionary and dag from calling class
+# gets references to function name dictionary and dependency_graph from calling class
 # gets calling function from stack vi inspect. Calling function is dependent on this function so function and calling function
 # form an edge in a Directed Acyclic Graph, this is built up as function as called, on-demand.
 
     def __get__(self, dom_obj, objtype):
 
-       #if self.dag is None :
-        self.dag  = dom_obj.dag
 
-      #  if self.function_names is None :
-        self.function_names =  dom_obj.function_names
-
-        a_stack = inspect.stack()
-        calling_function = a_stack[1][3]
+        the_call_stack = inspect.stack()
+        calling_function = the_call_stack[1][3]
 
 #       create a standalone function object that holds state: ie can be validated/invalidated, holds cached value
 #       bound to
@@ -122,21 +121,33 @@ class DagMethod(object):
             self.compute_node.set_value = self.set_value
             self.compute_node.is_valid = self.is_valid
 
-            self.function_names[self.method.func_name]  = self.compute_node
+            #lookup up compute node by object instance as well as method name
+            function_name = dom_obj.my_id() + "_" + self.method.func_name
 
+            method_name_node_map[function_name] = self.compute_node
 
         if not is_at_top_of_call_stack(calling_function):
 
-                calling_compute_node = self.function_names[calling_function]
-                if not dom_obj.dag.has_edge(calling_compute_node, self.compute_node) :
+            #lookup up compute node by object instance as well as method name
+
+                caller_class =  the_call_stack[1][0].f_locals['self']
+                calling_function_name = caller_class.my_id() + "_" +  calling_function
+
+                calling_compute_node = method_name_node_map[calling_function_name]
+                if not dependency_graph.has_edge(calling_compute_node, self.compute_node) :
                     visualize.plot_dag_edge(visualize.edge_count,self.method.func_name, calling_function)
-                    self.dag.add_edge(self.compute_node, calling_compute_node)
+                    dependency_graph.add_edge(self.compute_node, calling_compute_node)
                     visualize.edge_count += 1
 
         return self.compute_node
 
 class DomainObj(object):
+
+    instance_count = itertools.count(0)
+
     def __init__(self):
-        self.dag = DiGraph()
-        self.function_names = {}
+        self.id = self.instance_count.next()
+
+    def my_id(self):
+        return self.__class__.__name__ + "_" + str(self.id)
 
