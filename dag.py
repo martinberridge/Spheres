@@ -112,6 +112,8 @@ class DagMethod(object):
         self.compute_node.invalidate = self.invalidate
         self.compute_node.set_value = self.set_value
 
+        visualize.update_dag_node_plot(self.dag_node.valid, self.current_node_id, self.x, self.y, self.dag_node.value )
+
         #client can now evaluate Node invoke date method
         return self.compute_node
 
@@ -131,7 +133,7 @@ class DagMethod(object):
         #invalidate/force recalculation
         self.notify_dependent_nodes(self.dag_node)
 
-        visualize.update_dag_node_plot(self.dag_node.value, self.current_node_id, self.x, self.y, self.dag_node.value )
+        visualize.update_dag_node_plot(self.dag_node.valid, self.current_node_id, self.x, self.y, self.dag_node.value )
 
     def is_valid(self):
         return  self.dag_node.valid
