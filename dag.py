@@ -28,6 +28,7 @@ import visualize
 import itertools
 
 
+
 method_name_node_map = {}
 
 dependency_graph = DiGraph()
@@ -112,7 +113,7 @@ class DagMethod(object):
         self.compute_node.invalidate = self.invalidate
         self.compute_node.set_value = self.set_value
 
-        visualize.update_dag_node_plot(self.dag_node.valid, self.current_node_id, self.x, self.y, self.dag_node.value )
+        visualize.update_dag_node_plot(self.dag_node.valid, self.current_node_id, self.x, self.y, self.dag_node.value, self.dag_node.updated )
 
         #client can now evaluate Node invoke date method
         return self.compute_node
@@ -122,18 +123,19 @@ class DagMethod(object):
         if not self.dag_node.valid:
            self.dag_node.value = self.cached_method(*args  )
            self.dag_node.valid = True
-        visualize.update_dag_node_plot(self.dag_node.value, self.current_node_id, self.x, self.y, self.dag_node.value )
+           self.dag_node.updated = False
+        visualize.update_dag_node_plot(self.dag_node.valid, self.current_node_id, self.x, self.y, self.dag_node.value,self.dag_node.updated )
         return self.dag_node.value
 
     def invalidate(self):
 
         self.dag_node.valid = False
         self.dag_node.value = None
-
+        self.dag_node.updated = False
         #invalidate/force recalculation
         self.notify_dependent_nodes(self.dag_node)
 
-        visualize.update_dag_node_plot(self.dag_node.valid, self.current_node_id, self.x, self.y, self.dag_node.value )
+        visualize.update_dag_node_plot(self.dag_node.valid, self.current_node_id, self.x, self.y, self.dag_node.value,self.dag_node.updated )
 
     def is_valid(self):
         return  self.dag_node.valid
@@ -142,8 +144,9 @@ class DagMethod(object):
     def set_value(self, val):
         self.dag_node.value = val
         self.dag_node.valid = True
+        self.dag_node.updated = True
 
-        visualize.update_dag_node_plot(self.dag_node.valid, self.current_node_id, self.x, self.y, self.dag_node.value )
+        visualize.update_dag_node_plot(self.dag_node.valid, self.current_node_id, self.x, self.y, self.dag_node.value, self.dag_node.updated )
         self.notify_dependent_nodes(self.dag_node)
 
 # find dependent DagMethods which need to be recalculated when they called.
@@ -165,12 +168,18 @@ class DomainObj(object):
     def my_id(self):
         return self.__class__.__name__ + "_" + str(self.id)
 
+    def __repr__(self):
+        return self.my_id()
+
 class DagNode(object):
 
     def __init__(self, node_id):
         self.node_id = node_id
         self.valid = False
         self.value = None
+        self.updated = False
 
     def invalidate(self):
         self.valid = False
+        self.updated = False
+

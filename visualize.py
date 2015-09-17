@@ -27,12 +27,27 @@ def enable():
 
     plot = True
 
-def update_dag_node_plot(valid, function_name, x, y, value ):
+def update_dag_node_plot(valid, function_name, x, y, value, updated ):
 
         if gephi and plot:
-            node_attributes['r'] = 0.0 if valid else 1.0
-            node_attributes['g'] = 0.5 if valid else 0.0
-            node_attributes['b'] = 0.5 if valid else 0.0
+
+            RED,GREEN, BLUE = 0,1,2
+
+            red = (1.0, 0.0, 0.0)
+            bluegreen = (0.0, 0.5, 0.5)
+            amethyst = (0.6, 0.4, 0.8)
+
+            colour = red
+
+            if valid :
+                colour = bluegreen
+
+            if updated :
+                colour = amethyst
+
+            node_attributes['r'] = colour[RED]
+            node_attributes['g'] = colour[GREEN]
+            node_attributes['b'] = colour[BLUE]
 
             node_attributes['label'] = function_name + "():\r" + str(value)
             node_attributes['fixed'] = True
@@ -56,6 +71,10 @@ def calculate_plot_coordinates():
 def plot_node(x, y ,name):
 
     if gephi and plot:
+
+        node_attributes['r'] = 1.0
+        node_attributes['g'] = 0.0
+        node_attributes['b'] = 0.0
 
         node_attributes['label'] = name
         node_attributes['x'] = x
