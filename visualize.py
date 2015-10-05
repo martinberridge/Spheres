@@ -8,12 +8,13 @@ from client import GephiClient
 plot = False
 
 gephi = None
-node_attributes = {"size":50, 'r':1.0, 'g':0.0, 'b':0.0, 'x':1,'y':0, 'fixed':True  }
+node_attributes = {"size":15, 'r':1.0, 'g':0.0, 'b':0.0, 'x':1,'y':0, 'fixed':True  }
 node_count = 0
 edge_count = 0
 x = 0
 y = 0
 
+node_plot_coordinates = {}
 
 def enable():
     global gephi,plot
@@ -64,8 +65,8 @@ def plot_dag_edge(id,caller,callee):
         
 def calculate_plot_coordinates():
     global x,y
-    x += 0 if (node_count % 2) > 0 else  -200 if (node_count % 3) > 2 else 200
-    y += 0 if ((node_count + 1) % 2) > 1 else  -200 if ((node_count + 1) % 6) > 3 else 200
+    # x += 0 if (node_count % 2) > 0 else  -200 if (node_count % 3) > 2 else 200
+    # y += 0 if ((node_count + 1) % 2) > 1 else  -200 if ((node_count + 1) % 6) > 3 else 200
 
 
 def plot_node(x, y ,name):

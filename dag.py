@@ -33,6 +33,8 @@ method_name_node_map = {}
 
 dependency_graph = DiGraph()
 
+layout = {}
+
 # ------------------------------------------------helpers-----------------------------------
 def is_at_top_of_call_stack(calling_function):
 
@@ -41,7 +43,16 @@ def is_at_top_of_call_stack(calling_function):
 
 # -----------------------------------------------------------------------------------------------
 
+def update_layout():
+    if visualize.plot:
+        global layout
+        layout = nx.graphviz_layout(dependency_graph)
 
+def get_coordinates(node):
+    if visualize.plot:
+        return  layout[node]
+    else:
+        return (0,0)
 
 class DagMethod(object):
 
@@ -105,7 +116,10 @@ class DagMethod(object):
                 # add edge to dependency graph
                 if not dependency_graph.has_edge(dependent_dag_node, self.dag_node) :
                     visualize.plot_dag_edge(visualize.edge_count,self.current_node_id, dependent_dag_node_id)
+
                     dependency_graph.add_edge(self.dag_node, dependent_dag_node)
+                    update_layout()
+                    self.dag_node.x, self.dag_node.y = get_coordinates(self.dag_node)
                     visualize.edge_count += 1
 
         # monkey patch methods for routing state changing methods to DagNode
@@ -113,7 +127,7 @@ class DagMethod(object):
         self.compute_node.invalidate = self.invalidate
         self.compute_node.set_value = self.set_value
 
-        visualize.update_dag_node_plot(self.dag_node.valid, self.current_node_id, self.x, self.y, self.dag_node.value, self.dag_node.updated )
+        visualize.update_dag_node_plot(self.dag_node.valid, self.current_node_id, self.dag_node.x, self.dag_node.y, self.dag_node.value, self.dag_node.updated )
 
         #client can now evaluate Node invoke date method
         return self.compute_node
@@ -135,18 +149,19 @@ class DagMethod(object):
         #invalidate/force recalculation
         self.notify_dependent_nodes(self.dag_node)
 
-        visualize.update_dag_node_plot(self.dag_node.valid, self.current_node_id, self.x, self.y, self.dag_node.value,self.dag_node.updated )
+        visualize.update_dag_node_plot(self.dag_node.valid, self.current_node_id, self.dag_node.x, self.dag_node.y, self.dag_node.value,self.dag_node.updated )
 
     def is_valid(self):
         return  self.dag_node.valid
 
+#  overrides value returned by DagMethod. call invalidate to get original value by forcing recalculation
 #  overrides value returned by DagMethod. call invalidate to get original value by forcing recalculation
     def set_value(self, val):
         self.dag_node.value = val
         self.dag_node.valid = True
         self.dag_node.updated = True
 
-        visualize.update_dag_node_plot(self.dag_node.valid, self.current_node_id, self.x, self.y, self.dag_node.value, self.dag_node.updated )
+        visualize.update_dag_node_plot(self.dag_node.valid, self.current_node_id, self.dag_node.x, self.dag_node.y, self.dag_node.value, self.dag_node.updated )
         self.notify_dependent_nodes(self.dag_node)
 
 # find dependent DagMethods which need to be recalculated when they called.
@@ -178,6 +193,8 @@ class DagNode(object):
         self.valid = False
         self.value = None
         self.updated = False
+        self.x = 0
+        self.y = 0
 
     def invalidate(self):
         self.valid = False
