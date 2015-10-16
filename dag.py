@@ -19,6 +19,9 @@ DomObject - base class for any class that has DagMethod methods. Maintains the D
 
 """
 
+#TODO think about clean up after DomObjects/DagMethods destroyed
+
+
 
 from networkx import DiGraph
 import networkx as nx
@@ -166,12 +169,15 @@ class DagMethod(object):
 
 # find dependent DagMethods which need to be recalculated when they called.
     def notify_dependent_nodes (self, node):
-        if  dependency_graph.nodes():
+        nodes = dependency_graph.nodes()
+        if  nodes and node in nodes:
             dependents = nx.descendants(dependency_graph, node)
             for n in dependents : n.invalidate()
 
-
-
+def dump_graph_contents():
+    nodes = dependency_graph.nodes()
+    ids = [n.node_id for n in nodes]
+    return ids
 
 class DomainObj(object):
 
