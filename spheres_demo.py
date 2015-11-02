@@ -2,6 +2,11 @@ __author__ = 'martin berridge'
 
 import dag, math
 
+class Category (dag.DomainObj):
+    @dag.DagMethod
+    def name(self):
+        return "unknown"
+
 class Material (dag.DomainObj):
 
     @dag.DagMethod
@@ -11,6 +16,10 @@ class Material (dag.DomainObj):
     @dag.DagMethod
     def name(self):
         return  0.0
+
+    @dag.DagMethod
+    def category(self):
+        return None
 
 class Sphere (dag.DomainObj):
 
@@ -26,6 +35,14 @@ class Sphere (dag.DomainObj):
     def mass(self):
         return 4.0/3.0 * math.pi * self.radius() * self.material().density()
 
+    @dag.DagMethod
+    def is_metal(self):
+        return self.material().category().name() == "metal"
+
+    @dag.DagMethod
+    def is_non_metal(self):
+        return self.material().category().name() != "metal"
+
 class Container(dag.DomainObj):
 
     @dag.DagMethod
@@ -34,16 +51,30 @@ class Container(dag.DomainObj):
 
     @dag.DagMethod
     def mass(self):
-        retval = 0
-        for c in self.contents():
-            retval += c.mass()
-        return retval
+        return sum(map(lambda s: s.mass(), self.contents()))
+
+    @dag.DagMethod
+    def metal_mass(self):
+        return sum(map(lambda s: s.mass(), filter(lambda s: s.is_metal(), self.contents())))
+
+    @dag.DagMethod
+    def non_metal_mass(self):
+        return sum(map(lambda s: s.mass(), filter(lambda s: s.is_non_metal(), self.contents())))
 
 rubber = Material()
 steel = Material()
 
 rubber.density.set_value(1.0)
 steel.density.set_value(2.5)
+
+polymer = Category()
+polymer.name.set_value('polymer')
+
+metal = Category()
+metal.name.set_value('metal')
+
+rubber.category.set_value(polymer)
+steel.category.set_value(metal)
 
 steel_sphere1 = Sphere()
 steel_sphere1.material.set_value(steel)
@@ -87,3 +118,11 @@ steel.density.set_value(3.798)
 print c.mass()
 # everything cached - no recalc
 print c.mass()
+
+# only include metal spheres in calculation
+print c.metal_mass()
+print c.metal_mass()
+
+# only include non-metal spheres
+print c.non_metal_mass()
+print c.non_metal_mass()

@@ -39,10 +39,26 @@ dependency_graph = DiGraph()
 layout = {}
 
 # ------------------------------------------------helpers-----------------------------------
-def is_at_top_of_call_stack(calling_function):
 
-        return calling_function in ('main','<module>','setUp','tearDown') or  \
-               calling_function.startswith('test_')
+def most_recent_dag_node_id(stack):
+    for frame in stack:
+        calling_function = frame[3]
+        locals = frame[0].f_locals
+        if calling_function in ('main','<module>','setUp','tearDown') or \
+                calling_function.startswith('test_'):
+            break
+
+        if 'self' not in locals:
+            continue
+
+        # build key for looking up dependent DagMethod/DagNode
+        caller_class = locals['self']
+        dependent_dag_node_id = caller_class.my_id() + "_" +  calling_function
+
+        if dependent_dag_node_id in method_name_node_map:
+            return dependent_dag_node_id
+
+    return None
 
 # -----------------------------------------------------------------------------------------------
 
@@ -88,12 +104,12 @@ class DagMethod(object):
         # make key for looking up DagNode
         requested_node_id = self.get_requested_node_id(dom_obj)
 
-        # DagMethod class has only one instance but there can be multiple DomObj instanaces.
+        # DagMethod class has only one instance but there can be multiple DomObj instances.
         # is the call from a different DomObj instance from before?
         if self.current_node_id != requested_node_id:
             self.current_node_id = requested_node_id
             if requested_node_id not in method_name_node_map:
-                #create a DagNode for holding compute state and for loading into dependecy graph
+                # create a DagNode for holding compute state and for loading into dependency graph
                 visualize.plot_node(self.x, self.y,self.current_node_id)
                 method_name_node_map[self.current_node_id] = DagNode(self.current_node_id)
 
@@ -102,28 +118,19 @@ class DagMethod(object):
         # load dag node so state can be queried and changed
         self.dag_node =  method_name_node_map[self.current_node_id]
 
-        #who's calling this method?
-        call_stack = inspect.stack()
-        calling_function = call_stack[1][3]
+        # find the most recent DagMethod caller on the stack, not counting the current frame
+        dependent_dag_node_id = most_recent_dag_node_id(inspect.stack()[1:])
+        if dependent_dag_node_id != None:
 
-        #if caller is another DagMethod
-        if not is_at_top_of_call_stack(calling_function):
+            # add edge to dependency graph
+            dependent_dag_node = method_name_node_map[dependent_dag_node_id]
+            if not dependency_graph.has_edge(dependent_dag_node, self.dag_node) :
+                visualize.plot_dag_edge(visualize.edge_count,self.current_node_id, dependent_dag_node_id)
 
-                #build key for looking up dependent DagMethod/DagNode
-                caller_class =  call_stack[1][0].f_locals['self']
-                dependent_dag_node_id = caller_class.my_id() + "_" +  calling_function
-
-                assert(dependent_dag_node_id  in method_name_node_map )
-                dependent_dag_node = method_name_node_map[dependent_dag_node_id]
-
-                # add edge to dependency graph
-                if not dependency_graph.has_edge(dependent_dag_node, self.dag_node) :
-                    visualize.plot_dag_edge(visualize.edge_count,self.current_node_id, dependent_dag_node_id)
-
-                    dependency_graph.add_edge(self.dag_node, dependent_dag_node)
-                    update_layout()
-                    self.dag_node.x, self.dag_node.y = get_coordinates(self.dag_node)
-                    visualize.edge_count += 1
+                dependency_graph.add_edge(self.dag_node, dependent_dag_node)
+                update_layout()
+                self.dag_node.x, self.dag_node.y = get_coordinates(self.dag_node)
+                visualize.edge_count += 1
 
         # monkey patch methods for routing state changing methods to DagNode
         self.compute_node.is_valid = self.is_valid
@@ -132,7 +139,7 @@ class DagMethod(object):
 
         visualize.update_dag_node_plot(self.dag_node.valid, self.current_node_id, self.dag_node.x, self.dag_node.y, self.dag_node.value, self.dag_node.updated )
 
-        #client can now evaluate Node invoke date method
+        # client can now evaluate Node invoke date method
         return self.compute_node
 
     def __call__(self,*args):
