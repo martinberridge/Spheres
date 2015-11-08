@@ -32,23 +32,33 @@ def findClosestDate(end_date, date_index, before = 1):
     return end_date
 
 
+class EquityMarketData(object):
 
-class Underlyer():
-    def __init__(self, value):
-        self.name = value
+    def __init__(self):
         self.hist_file = HIST_FILE
-        self.vol_file = VOL_FILE
         self.hist_prices = None
-        self.vol_params = None
 
-    def getSpot(self):
+    def getSpot(self,ticker):
         if self.hist_prices is None:
            self.hist_prices = pd.read_csv(self.hist_file, parse_dates =True, dayfirst = True, index_col = 'Index')
 
         last_date = max(self.hist_prices.index)
 
-        self.spot = self.hist_prices.ix[last_date, self.name]
+        self.spot = self.hist_prices.ix[last_date, ticker]
 
+        return self.spot
+
+class Underlyer():
+    def __init__(self, value):
+        self.name = value
+        self.vol_file = VOL_FILE
+        self.vol_params = None
+        self.equity_market_data = EquityMarketData()
+        self.spot = None
+
+    def getSpot(self):
+        if self.spot is None:
+           self.spot = self.equity_market_data.getSpot(self.name)
         return self.spot
 
     def setSpot(self, value):
@@ -94,6 +104,8 @@ class Underlyer():
     #         print 'WARNING: Period start date is outside the range of available dates. \nDisplaying max available data.'
     #
     #     return ul_hist_prices
+
+
 
 
 
