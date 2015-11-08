@@ -38,15 +38,79 @@ class EquityMarketData(object):
         self.hist_file = HIST_FILE
         self.hist_prices = None
 
-    def getSpot(self,ticker):
+    def get_spot(self,ticker):
         if self.hist_prices is None:
            self.hist_prices = pd.read_csv(self.hist_file, parse_dates =True, dayfirst = True, index_col = 'Index')
 
         last_date = max(self.hist_prices.index)
 
-        self.spot = self.hist_prices.ix[last_date, ticker]
+        self.spot = float(self.hist_prices.ix[last_date, ticker])
 
         return self.spot
+
+class OptionMarketData(object):
+
+    def __init__(self):
+        self.vol_file = VOL_FILE
+        self.vol_params = None
+
+    def get_vol(self, ticker, spot,strike = 1.0, tenor = 1.0, strike_type = 'pct'):
+        if  self.vol_params is None :
+           self.vol_params = pd.read_csv(self.vol_file, index_col = 'Underlyer')
+
+        atm_vol = self.vol_params.ix[ticker].ATMVol
+        skew = self.vol_params.ix[ticker].Skew
+
+        if strike_type != 'pct':
+            strike == strike/float(spot)
+
+        if strike <= 1:
+            convexity = self.vol_params.ix[ticker].PutConvexity
+        else:
+            convexity = self.vol_params.ix[ticker].CallConvexity
+
+        flatBelow = self.vol_params.ix[ticker].FlatVolsBelow
+        flatAbove = self.vol_params.ix[ticker].FlatVolsAbove
+        cap = self.vol_params.ix[ticker].CappedAt
+        floor = self.vol_params.ix[ticker].FlooredAt
+
+        strike_vol = min(cap, max(floor, atm_vol + (1- max(flatBelow, min(flatAbove,strike)))/0.1 * skew /math.sqrt(tenor) + ((1-max(flatBelow, min(flatAbove, strike)))/0.1)**2 * convexity / tenor))
+        return strike_vol
+
+
+class RatesMarket(object):
+
+    def get_spot(self):
+        return 0.025
+
+class OptionsMarket(object):
+
+    def __init__(self,ticker, market_data):
+        self.ticker = ticker
+        self.market_data = market_data
+        self._tweak = 0.0
+
+    def tweak(self):
+        return self._tweak
+
+    def get_vol(self, strike = 1, tenor = 1, strike_type = 'pct'):
+        return self.market_data.get_vol(self.ticker,spot,strike,tenor,strike_type) + self.tweak()
+
+
+
+class EquityMarket(object):
+
+    def __init__(self,ticker, market_data):
+        self.ticker = ticker
+        self.market_data = market_data
+        self._tweak = 0.0
+
+    def tweak(self):
+        return self._tweak
+
+    def get_spot(self):
+        return self.market_data.get_spot(self.ticker) + self.tweak()
+
 
 class Underlyer():
     def __init__(self, value):
@@ -54,41 +118,23 @@ class Underlyer():
         self.vol_file = VOL_FILE
         self.vol_params = None
         self.equity_market_data = EquityMarketData()
+        self.option_market_data = OptionMarketData()
         self.spot = None
+        self.vol = None
 
     def getSpot(self):
         if self.spot is None:
-           self.spot = self.equity_market_data.getSpot(self.name)
+           self.spot = self.equity_market_data.get_spot(self.name)
         return self.spot
 
     def setSpot(self, value):
         self.spot = value
 
-    def getVol(self, strike = 1, tenor = 1, strike_type = 'pct', hist_file = VOL_FILE):
-        if not self.vol_params :
-           self.vol_params = pd.read_csv(self.vol_file, index_col = 'Underlyer')
+    def getVol(self, strike = 1, tenor = 1, strike_type = 'pct'):
 
-        atm_vol = self.vol_params.ix[self.name].ATMVol
-        skew = self.vol_params.ix[self.name].Skew
-
-        if strike_type == 'pct':
-            strike == strike
-        else:
-            strike == strike/self.getSpot()
-
-        if strike <= 1:
-            convexity = self.vol_params.ix[self.name].PutConvexity
-        else:
-            convexity = self.vol_params.ix[self.name].CallConvexity
-
-        flatBelow = self.vol_params.ix[self.name].FlatVolsBelow
-        flatAbove = self.vol_params.ix[self.name].FlatVolsAbove
-        cap = self.vol_params.ix[self.name].CappedAt
-        floor = self.vol_params.ix[self.name].FlooredAt
-
-        strike_vol = min(cap, max(floor, atm_vol + (1- max(flatBelow, min(flatAbove,strike)))/0.1 * skew /math.sqrt(tenor) + ((1-max(flatBelow, min(flatAbove, strike)))/0.1)**2 * convexity / tenor))
-        return strike_vol
-
+        if self.vol is None:
+           self.vol = self.option_market_data.get_vol(self.name,self.equity_market_data.get_spot(self.name),strike, tenor, strike_type)
+        return self.vol
 
     # def getHistPrices(self, valueDate, numObservations = 1, dayfirst = True, hist_file = HIST_FILE):
     #     hist_prices = pd.read_csv(hist_file, parse_dates =True, dayfirst = True, index_col = 'Index')
@@ -109,38 +155,42 @@ class Underlyer():
 
 
 
-class Instrument():
-    def __init__(self, value, inst_type):
-        self.name = value
-        self.type = inst_type
-
-    def PV(self):
-        #calculate PV
-        return 0
-
-    def setPrice(self, price):
-        self.PV = price
-        return self.PV
-
-class Stocks(Instrument):
-    def __init__(self, value):
-        self.name = value
-
-    def PV(self):
-        stock_ul = Underlyer(self.name)
-        self.PV = stock_ul.getSpot()
-        return self.PV
-
-class Options(Instrument):
-    def __init__(self):
-        print 'Option'
-
-
+# class Instrument():
+#     def __init__(self, value, inst_type):
+#         self.name = value
+#         self.type = inst_type
+#
+#     def PV(self):
+#         #calculate PV
+#         return 0
+#
+#     def setPrice(self, price):
+#         self.PV = price
+#         return self.PV
+#
+# class Stocks(Instrument):
+#     def __init__(self, value):
+#         self.name = value
+#
+#     def PV(self):
+#         stock_ul = Underlyer(self.name)
+#         self.PV = stock_ul.getSpot()
+#         return self.PV
+#
+# class Options(Instrument):
+#     def __init__(self):
+#         print 'Option'
 
 
-class EuropeanOption(Options):
-    def __init__(self, underlyer, opt_type, opt_strike, opt_maturity):
-        self.underlyer = underlyer
+#class EuropeanOption(Options):
+
+class EuropeanOption(object):
+    def __init__(self, equity_market, options_market,rates_market, opt_type, opt_strike, opt_maturity):
+
+        self.equity_market = equity_market
+        self.options_market = options_market
+        self.rates_market = rates_market
+
         if opt_type.upper() == 'CALL':
             self.opt_type = ql.Option.Call
         elif opt_type.upper() == 'PUT':
@@ -150,15 +200,14 @@ class EuropeanOption(Options):
 
         self.strike = opt_strike
         self.maturity = opt_maturity
-        self.name = underlyer+opt_type+str(opt_strike)+str(opt_maturity)
+        self.name = equity_market.ticker+opt_type+str(opt_strike)+str(opt_maturity)
 
     def PV(self, SpotOverRide = None, VolOverRide = None, VolOverRideType = 'shock'):
-        ul = Underlyer(self.underlyer)
 
         if SpotOverRide != None:
             current_spot = SpotOverRide
         else:
-            current_spot = ul.getSpot()
+            current_spot = self.equity_market.get_spot()
 
         spot = ql.SimpleQuote(current_spot)
         maturity_date = parse(self.maturity)
@@ -170,14 +219,15 @@ class EuropeanOption(Options):
 
         if VolOverRide != None:
             if VolOverRideType.upper() == 'SHOCK':
-                strike_vol = ul.getVol(self.strike,tenor = (expiry - val_date), strike_type = 'abs')+VolOverRide
+                strike_vol = self.options_market.get_vol(self.strike,tenor = (expiry - val_date), strike_type = 'abs')+VolOverRide
             else:
                 strike_vol = VolOverRide
+
         else:
-            strike_vol = ul.getVol(self.strike,tenor = (expiry - val_date), strike_type = 'abs')
+            strike_vol = self.options_market.get_vol(self.strike,tenor = (expiry - val_date), strike_type = 'abs')
 
         sigma = ql.SimpleQuote(strike_vol)
-        r = ql.SimpleQuote(0.025)
+        r = ql.SimpleQuote(self.rates_market.get_spot())
 
         option = ql.EuropeanOption(ql.PlainVanillaPayoff(self.opt_type,self.strike),ql.EuropeanExercise(expiry))
 
@@ -190,7 +240,17 @@ class EuropeanOption(Options):
         return option.NPV()
 
 
-option1 = EuropeanOption('XOM','put',72,'25/12/2015')
+emd = EquityMarketData()
+omd = OptionMarketData()
+em = EquityMarket("XOM",emd)
+om = OptionsMarket("XOM",omd)
+rm = RatesMarket()
+
+spot = em.get_spot()
+print spot
+print om.get_vol(spot)
+
+option1 = EuropeanOption(em,om,rm,'put',72,'25/12/2015')
 
 print option1.PV()
 
@@ -202,10 +262,11 @@ volRange = np.linspace(-0.05,0.05,3)
 optionPV = []
 for j in volRange:
     spotLadder = []
+    spot  = em.get_spot()
     for i in spotRange:
-        spot = Underlyer(option1.underlyer).getSpot()
         spotLadder.append(option1.PV(SpotOverRide = spot*(1+i), VolOverRide = j))
     optionPV.append(spotLadder)
+
 
 print optionPV
 
