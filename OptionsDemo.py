@@ -8,12 +8,10 @@ import numpy as np
 from dateutil.parser import parse
 from datetime import  datetime
 import math
-
+import graphfunctions as gf
 import QuantLib as ql
-print "couldn't load QuantLib - check installation"
 
 import dag
-import graphfunctions
 import visualize
 
 # HIST_FILE = 'C:\Users\mhna\Documents\Python\RiskLab\sa\HistPrices.csv'
@@ -81,7 +79,7 @@ class OptionsMarket(dag.DomainObj):
         self.market_data = market_data
 
     @dag.DagMethod
-    def tweak(self):
+    def market_tweak(self):
         return 0
 
     def my_id(self):
@@ -89,7 +87,7 @@ class OptionsMarket(dag.DomainObj):
 
     @dag.DagMethod
     def vol(self, spot, strike = 1, tenor = 1, strike_type = 'pct'):
-        tweaked_vol = self.market_data.get_vol(self.ticker,spot,strike,tenor,strike_type) + self.tweak()
+        tweaked_vol = self.market_data.get_vol(self.ticker,spot,strike,tenor,strike_type) + self.market_tweak()
         return tweaked_vol
 
 class EquityMarket(dag.DomainObj):
@@ -105,12 +103,12 @@ class EquityMarket(dag.DomainObj):
         return self.ticker + "_" + str(self.id)
 
     @dag.DagMethod
-    def tweak(self):
+    def market_tweak(self):
         return 0
 
     @dag.DagMethod
     def spot(self):
-        return self.market_data.get_spot(self.ticker) + self.tweak()
+        return self.market_data.get_spot(self.ticker) + self.market_tweak()
 
 class EuropeanOption(dag.DomainObj):
 
@@ -205,8 +203,8 @@ def main():
     for j in volRange:
         spotLadder = []
         for i in spotRange:
-            em.tweak.set_value(spot * i)
-            om.tweak.set_value(j)
+            em.market_tweak.set_value(spot * i)
+            om.market_tweak.set_value(j)
             spotLadder.append( option1.PV() )
         optionPV.append(spotLadder)
 
@@ -220,14 +218,30 @@ def main():
         spotLadder = []
 
         for i in spotRange:
-            with graphfunctions.context():
-                graphfunctions.tweak( em.tweak,(spot * i) )
-                graphfunctions.tweak( om.tweak, j )
+            with gf.context():
+                gf.tweak( em.market_tweak,(spot * i) )
+                gf.tweak( om.market_tweak, j )
                 spotLadder.append( option1.PV())
 
         optionPV.append(spotLadder)
 
     print optionPV
+
+    #spot ladder using layers
+
+    layers = []
+
+    for bump in spotRange :
+        l = gf.layer()
+        with l:
+           gf.tweak(em.market_tweak,bump)
+        layers.append(l)
+
+    bumps = iter(spotRange)
+    for alayer in layers:
+        with alayer:
+           print "pv spot 1+%s: %s" % (next(bumps), option1.PV())
+
 
 
 if __name__ == "__main__" :
