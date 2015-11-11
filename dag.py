@@ -142,10 +142,10 @@ class DagMethod(object):
         # client can now evaluate Node invoke date method
         return self.compute_node
 
-    def __call__(self,*args):
+    def __call__(self,*args,**kwargs):
 
         if not self.dag_node.valid:
-           self.dag_node.value = self.cached_method(*args  )
+           self.dag_node.value = self.cached_method(*args,**kwargs  )
            self.dag_node.valid = True
            self.dag_node.updated = False
         visualize.update_dag_node_plot(self.dag_node.valid, self.current_node_id, self.x, self.y, self.dag_node.value,self.dag_node.updated )
