@@ -12,12 +12,14 @@ import graphfunctions as gf
 import QuantLib as ql
 
 import dag
-import visualize
+# import visualize
+#
+# visualize.enable()
 
-# HIST_FILE = 'C:\Users\mhna\Documents\Python\RiskLab\sa\HistPrices.csv'
-# VOL_FILE =  'C:\Users\mhna\Documents\Python\RiskLab\sa\VolParameters.csv'
-HIST_FILE = '~/Downloads/HistPrices.csv'
-VOL_FILE = '~/Downloads/VolParameters.csv'
+HIST_FILE = 'C:\Users\mhna\Documents\Python\RiskLab\sa\HistPrices.csv'
+VOL_FILE =  'C:\Users\mhna\Documents\Python\RiskLab\sa\VolParameters.csv'
+# HIST_FILE = '~/Downloads/HistPrices.csv'
+# VOL_FILE = '~/Downloads/VolParameters.csv'
 
 class EquityMarketData(object):
 
@@ -49,7 +51,7 @@ class OptionMarketData(object):
         skew = self.vol_params.ix[ticker].Skew
 
         if strike_type != 'pct':
-            strike == strike/float(spot)
+            strike = strike/float(spot)
 
         if strike <= 1:
             convexity = self.vol_params.ix[ticker].PutConvexity
@@ -176,21 +178,88 @@ class EuropeanOption(dag.DomainObj):
         return PV
 
 
+class Book(dag.DomainObj) :
+
+    @dag.DagMethod
+    def positions(self):
+        return []
+
+    @dag.DagMethod
+    def PV(self):
+        pv = 0.0
+        for p in self.positions():
+            pv += p.PV()
+
+        return pv
+
+
+class Portfolio(dag.DomainObj) :
+
+    @dag.DagMethod
+    def positions(self):
+        return []
+
+    @dag.DagMethod
+    def PV(self):
+        pv = 0.0
+        for p in self.positions():
+            pv += p.PV()
+
+        return pv
+
+
 
 def main():
     emd = EquityMarketData()
     omd = OptionMarketData()
     em = EquityMarket("XOM",emd)
     om = OptionsMarket("XOM",omd)
+    em_a = EquityMarket("AAPL",emd)
+    om_a = OptionsMarket("AAPL",omd)
     rm = RatesMarket()
+    val_date = ql.Date(12,11,2015)
 
     option1 = EuropeanOption("XOM",'put',72,'25/12/2015')
     option1.equity_market.set_value(em)
     option1.options_market.set_value(om)
     option1.rates_market.set_value(rm)
-    option1.value_date.set_value(ql.Date(9,11,2015))
+    option1.value_date.set_value(val_date)
 
     print option1.PV()
+
+
+    option2 = EuropeanOption("XOM",'call',74,'25/03/2016')
+    option2.equity_market.set_value(em)
+    option2.options_market.set_value(om)
+    option2.rates_market.set_value(rm)
+    option2.value_date.set_value(val_date)
+
+    print option2.PV()
+
+    option3 = EuropeanOption("AAPL",'call',115,'25/01/2016')
+    option3.equity_market.set_value(em_a)
+    option3.options_market.set_value(om_a)
+    option3.rates_market.set_value(rm)
+    option3.value_date.set_value(val_date)
+
+    print option3.PV()
+
+
+    b1 = Book()
+    pos1 = [option1, option2]
+    b1.positions.set_value(pos1)
+
+    print 'Book value' + b1.PV()
+
+    b2 = Book()
+    pos2 = [option2, option3]
+    b2.positions.set_value(pos2)
+
+    pf = Portfolio()
+    books = [b1,b2]
+    pf.positions.set_value(books)
+
+    print pf.PV()
 
 
     spotRange = np.linspace(-.10,.10,5)
@@ -199,19 +268,20 @@ def main():
     optionPV = []
     spot  = em.spot()
 
-    # tweak by overriding spot/vol tweak values
-    for j in volRange:
-        spotLadder = []
-        for i in spotRange:
-            em.market_tweak.set_value(spot * i)
-            om.market_tweak.set_value(j)
-            spotLadder.append( option1.PV() )
-        optionPV.append(spotLadder)
-
-    print optionPV
+    # # tweak by overriding spot/vol tweak values
+    # for j in volRange:
+    #     spotLadder = []
+    #     for i in spotRange:
+    #         em.market_tweak.set_value(spot * i)
+    #         om.market_tweak.set_value(j)
+    #         spotLadder.append( option1.PV() )
+    #     optionPV.append(spotLadder)
+    #
+    # print optionPV
 
     #clean up
-    optionPV = []
+
+    # optionPV = []
 
     #tweak the markets using context/tweaks - reprice options dependent on these markets
     for j in volRange:
@@ -221,7 +291,7 @@ def main():
             with gf.context():
                 gf.tweak( em.market_tweak,(spot * i) )
                 gf.tweak( om.market_tweak, j )
-                spotLadder.append( option1.PV())
+                spotLadder.append( pf.PV())
 
         optionPV.append(spotLadder)
 
@@ -240,7 +310,7 @@ def main():
     bumps = iter(spotRange)
     for alayer in layers:
         with alayer:
-           print "pv spot 1+%s: %s" % (next(bumps), option1.PV())
+           print "pv spot 1+%s: %s" % (next(bumps), pf.PV())
 
 
 
