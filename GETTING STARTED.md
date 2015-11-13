@@ -2,7 +2,7 @@
 
 #### Install windows packages
 
-1. Install choco using instructions from chocolatey.org
+1. Install choco using instructions from https://chocolatey.org
 2. `choco install python2`
 3. `choco install graphviz`
 4. `choco install jdk7`
