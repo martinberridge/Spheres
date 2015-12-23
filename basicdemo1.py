@@ -7,7 +7,7 @@ import graphfunctions
 
 import visualize
 
-visualize.enable() #comment out this line to disable graphing
+#visualize.enable() #comment out this line to disable graphing
 
 class Greeter(DomainObj):
     @DagMethod

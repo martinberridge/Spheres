@@ -1,215 +1,143 @@
-
-__author__ = 'martin berridge & john barclay'
-
+__author__ = 'Martin Berridge, John Barclay & Eirik Hektoen'
 
 """
 Framework for excel-style lazy evaluation of class methods - DagMethod
-For compute efficiency, we can follow lazy evaluation similar to "memoization" when values are cached and are only recalculated when invalidated.
-In addition to lazy evaluation DagMethods can be overridden i.e. their values set to constants in the same way that formulas can be overridden in Excel.
-To reset a DagMethod you invalidate it to force recalculation.
-When you change an input to a formula in Excel , that function and dependent functions are recalculated.
-If you override a DagMethod in this framework, DagMethods that call it (and are dependent on it by definition) will be invalidated.
-The framework maintains a dependency graph (A Directed Acyclic Graph - DAG -  hence the names) like Excel to work out which dependent DagMethods need to be invalidated.
+
+For compute efficiency, we can follow lazy evaluation similar to "memoization" when values are cached and are only
+recalculated when invalidated. In addition to lazy evaluation DagMethods can be overridden i.e. their values set to
+constants in the same way that formulas can be overridden in Excel. To reset a DagMethod you invalidate it to force
+recalculation. When you change an input to a formula in Excel, that function and dependent functions are recalculated.
+If you override a DagMethod in this framework, DagMethods that call it (and are dependent on it by definition) will be
+invalidated. The framework maintains a dependency graph (a Directed Acyclic Graph - DAG -  hence the names) like Excel
+to work out which dependent DagMethods need to be invalidated.
 
 Exports following classes:
 
-DagMethod - decorator class that wraps members of a class derived from DomObject to give them functionality described above.
+DagMethod - decorator class that wraps members of a class derived from DomObject to give them functionality described
+            above.
 DagNode -   holds compute state for each DomObject/Dag instance
-DomObject - base class for any class that has DagMethod methods. Maintains the DAG which implements the dependency graph of DagMethod
+DomObject - base class for any class that has DagMethod methods. Maintains the DAG which implements the dependency graph
+            of DagMethod
 
 """
 
-#TODO think about clean up after DomObjects/DagMethods destroyed
+# TODO think about clean up after DomObjects/DagMethods destroyed
 
-
-
-from networkx import DiGraph
-import networkx as nx
-import inspect
-import functools
+import networkx
 import visualize
 import itertools
+import collections
 
+node_call_stack = collections.deque()
 
+dependency_graph = networkx.DiGraph()
 
-method_name_node_map = {}
-
-dependency_graph = DiGraph()
-
-layout = {}
-
-# ------------------------------------------------helpers-----------------------------------
-
-def most_recent_dag_node_id(stack):
-    for frame in stack:
-        calling_function = frame[3]
-        locals = frame[0].f_locals
-        if calling_function in ('main','<module>','setUp','tearDown') or \
-                calling_function.startswith('test_'):
-            break
-
-        if 'self' not in locals:
-            continue
-
-        # build key for looking up dependent DagMethod/DagNode
-        caller_class = locals['self']
-        dependent_dag_node_id = caller_class.my_id() + "_" +  calling_function
-
-        if dependent_dag_node_id in method_name_node_map:
-            return dependent_dag_node_id
-
-    return None
-
-# -----------------------------------------------------------------------------------------------
-
-def update_layout():
-    if visualize.plot:
-        global layout
-        layout = nx.graphviz_layout(dependency_graph)
-
-def get_coordinates(node):
-    if visualize.plot:
-        return  layout[node]
-    else:
-        return (0,0)
-
-class DagMethod(object):
-
-# Decorator class which intercepts binding and invocation of DomObject methods to implement lazy evaluation/memoization.
-# Intercepts invocation to inspect state of DagNode object mapped to object/method instance to determine whether to return
-# cached result or rebuild cache by evaluating "curried" copy of DomObject method.
-# Routes invalidation of result cache and and overiding of return value to DagNode object which is stored on an in-memory directed acyclic
-# graph/dependency graph.
-
-# see http://www.rafekettler.com/magicmethods.html which is the best guide to __???__ methods (i.e. magic methods) in python
-# and https://docs.python.org/2/reference/datamodel.html#object.__call__
-
-    cached_method = None
-    compute_node = None
-    x,y = 0,0
-
-    def __init__(self, a_dag_method) :
-           self.current_node_id = None
-           self.cached_method = a_dag_method
-
-# ---- helper ----
-    def get_requested_node_id(self,dom_obj):
-        return dom_obj.my_id() + "_" + self.cached_method.func_name
-
-# ----- intercept referencing of method by class
-    def __get__(self, dom_obj, dummy_objtype_parameter):
-
-        global method_name_node_map
-
-        # make key for looking up DagNode
-        requested_node_id = self.get_requested_node_id(dom_obj)
-
-        # DagMethod class has only one instance but there can be multiple DomObj instances.
-        # is the call from a different DomObj instance from before?
-        if self.current_node_id != requested_node_id:
-            self.current_node_id = requested_node_id
-            if requested_node_id not in method_name_node_map:
-                # create a DagNode for holding compute state and for loading into dependency graph
-                visualize.plot_node(self.x, self.y,self.current_node_id)
-                method_name_node_map[self.current_node_id] = DagNode(self.current_node_id)
-
-        # refresh "curried" function object which routes invocation
-        self.compute_node = functools.partial(self.__call__, dom_obj)
-        # load dag node so state can be queried and changed
-        self.dag_node =  method_name_node_map[self.current_node_id]
-
-        # find the most recent DagMethod caller on the stack, not counting the current frame
-        dependent_dag_node_id = most_recent_dag_node_id(inspect.stack()[1:])
-        if dependent_dag_node_id != None:
-
-            # add edge to dependency graph
-            dependent_dag_node = method_name_node_map[dependent_dag_node_id]
-            if not dependency_graph.has_edge(dependent_dag_node, self.dag_node) :
-                visualize.plot_dag_edge(visualize.edge_count,self.current_node_id, dependent_dag_node_id)
-
-                dependency_graph.add_edge(self.dag_node, dependent_dag_node)
-                update_layout()
-                self.dag_node.x, self.dag_node.y = get_coordinates(self.dag_node)
-                visualize.edge_count += 1
-
-        # monkey patch methods for routing state changing methods to DagNode
-        self.compute_node.is_valid = self.is_valid
-        self.compute_node.invalidate = self.invalidate
-        self.compute_node.set_value = self.set_value
-
-        visualize.update_dag_node_plot(self.dag_node.valid, self.current_node_id, self.dag_node.x, self.dag_node.y, self.dag_node.value, self.dag_node.updated )
-
-        # client can now evaluate Node invoke date method
-        return self.compute_node
-
-    def __call__(self,*args,**kwargs):
-
-        if not self.dag_node.valid:
-           self.dag_node.value = self.cached_method(*args,**kwargs  )
-           self.dag_node.valid = True
-           self.dag_node.updated = False
-        visualize.update_dag_node_plot(self.dag_node.valid, self.current_node_id, self.x, self.y, self.dag_node.value,self.dag_node.updated )
-        return self.dag_node.value
-
-    def invalidate(self):
-
-        self.dag_node.valid = False
-        self.dag_node.value = None
-        self.dag_node.updated = False
-        #invalidate/force recalculation
-        self.notify_dependent_nodes(self.dag_node)
-
-        visualize.update_dag_node_plot(self.dag_node.valid, self.current_node_id, self.dag_node.x, self.dag_node.y, self.dag_node.value,self.dag_node.updated )
-
-    def is_valid(self):
-        return  self.dag_node.valid
-
-#  overrides value returned by DagMethod. call invalidate to get original value by forcing recalculation
-#  overrides value returned by DagMethod. call invalidate to get original value by forcing recalculation
-    def set_value(self, val):
-        self.dag_node.value = val
-        self.dag_node.valid = True
-        self.dag_node.updated = True
-
-        visualize.update_dag_node_plot(self.dag_node.valid, self.current_node_id, self.dag_node.x, self.dag_node.y, self.dag_node.value, self.dag_node.updated )
-        self.notify_dependent_nodes(self.dag_node)
-
-# find dependent DagMethods which need to be recalculated when they called.
-    def notify_dependent_nodes (self, node):
-        nodes = dependency_graph.nodes()
-        if  nodes and node in nodes:
-            dependents = nx.descendants(dependency_graph, node)
-            for n in dependents : n.invalidate()
-
-def dump_graph_contents():
-    nodes = dependency_graph.nodes()
-    ids = [n.node_id for n in nodes]
-    return ids
 
 class DomainObj(object):
-
     instance_count = itertools.count(0)
 
     def __init__(self):
         self.id = self.instance_count.next()
+        # derived classes may optionally set different, unique names in their __init__ methods
+        self._name = self.__class__.__name__ + "_" + str(self.id)
 
-    def my_id(self):
-        return self.__class__.__name__ + "_" + str(self.id)
 
-    def __repr__(self):
-        return self.my_id()
+class DagMethod(object):
+    # Decorator class which intercepts binding and invocation of DomObject methods to implement lazy
+    # evaluation/memoization. Intercepts invocation to inspect state of DagNode object mapped to object/method instance
+    # to determine whether to return cached result or rebuild cache by evaluating "curried" copy of DomObject method.
+    # Routes invalidation of result cache and and overiding of return value to DagNode object which is stored on an
+    # in-memory directed acyclic graph/dependency graph.
+
+    # See http://www.rafekettler.com/magicmethods.html which is the best guide to __???__ methods (i.e. magic methods)
+    # and https://docs.python.org/2/reference/datamodel.html#object.__call__
+
+    def __init__(self, method):
+        self.method = method
+        self.node_map = {}
+
+    def __get__(self, obj, obj_type):
+        node = self.node_map.get(obj._name)
+        if not node:
+            node = DagNode(obj, self.method)
+            self.node_map[obj._name] = node
+        return node
+
 
 class DagNode(object):
-
-    def __init__(self, node_id):
-        self.node_id = node_id
-        self.valid = False
+    def __init__(self, obj, method):
+        self.obj = obj
+        self.method = method
+        self.name = obj._name + "_" + method.func_name
         self.value = None
+        self.valid = False
         self.updated = False
         self.x = 0
         self.y = 0
+        visualize.add_node(self.x, self.y, self.name)
+        update_plot(self)
+
+    def __call__(self, *args, **kwargs):
+        if node_call_stack:
+            last_node = node_call_stack[-1]
+            if not dependency_graph.has_edge(self, last_node):
+                dependency_graph.add_edge(self, last_node)
+                visualize.add_edge(self.name, last_node.name)
+                self.x, self.y = update_layout(self)
+        if not self.valid:
+            node_call_stack.append(self)
+            self.value = self.method(self.obj, *args, **kwargs)
+            node_call_stack.pop()
+            self.valid = True
+            self.updated = False
+            update_plot(self)
+        return self.value
+
+    def set_value(self, val):
+        self.value = val
+        self.valid = True
+        self.updated = True
+        update_plot(self)
+        self.notify_dependent_nodes()
 
     def invalidate(self):
+        self.value = None
         self.valid = False
         self.updated = False
+        update_plot(self)
+        self.notify_dependent_nodes()
 
+    def notify_dependent_nodes(self):
+        nodes = dependency_graph.nodes()
+        if nodes and self in nodes:
+            for node in networkx.descendants(dependency_graph, self):
+                node.invalidate()
+
+
+layout = {}
+
+
+def update_layout(node):
+    if visualize.plot:
+        global layout
+        layout = networkx.graphviz_layout(dependency_graph)
+        return layout[node]
+    return 0, 0
+
+
+def update_plot(node):
+    visualize.update_dag_node_plot(node.valid, node.name, node.x, node.y, node.value, node.updated)
+
+
+def print_graph_edges():
+    edges = [(e[1].name, e[0].name) for e in dependency_graph.edges()]
+    edges.sort()
+    w = max(map(lambda edge: len(edge[0]), edges)) + 4
+    last = None
+    for edge in edges:
+        if edge[0] != last:
+            print
+            print '{0:{1}}{2}'.format(edge[0], w, edge[1])
+            last = edge[0]
+        else:
+            print '{0:{1}}{2}'.format('', w, edge[1])

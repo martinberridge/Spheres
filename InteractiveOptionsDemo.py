@@ -12,14 +12,20 @@ import graphfunctions as gf
 import QuantLib as ql
 
 import dag
-# import visualize
-#
-# visualize.enable()
+import visualize
 
 # HIST_FILE = 'C:\Users\mhna\Documents\Python\RiskLab\sa\HistPrices.csv'
 # VOL_FILE =  'C:\Users\mhna\Documents\Python\RiskLab\sa\VolParameters.csv'
 HIST_FILE = 'C:/cygwin/home/ekhn/ri/OptionsData/HistPrices.csv'
 VOL_FILE =  'C:/cygwin/home/ekhn/ri/OptionsData/VolParameters.csv'
+
+
+
+
+
+
+
+
 
 
 class EquityMarketData(object):
@@ -38,7 +44,6 @@ class EquityMarketData(object):
 
         return self.spot
 
-
 class OptionMarketData(object):
 
     def __init__(self):
@@ -53,7 +58,7 @@ class OptionMarketData(object):
         skew = self.vol_params.ix[ticker].Skew
 
         if strike_type != 'pct':
-            strike = strike/float(spot)
+            strike == strike/float(spot)
 
         if strike <= 1:
             convexity = self.vol_params.ix[ticker].PutConvexity
@@ -75,7 +80,6 @@ class RatesMarket(dag.DomainObj):
      def spot(self):
         return 0.025
 
-
 class OptionsMarket(dag.DomainObj):
 
     def __init__(self, ticker, market_data):
@@ -93,7 +97,6 @@ class OptionsMarket(dag.DomainObj):
         tweaked_vol = self.market_data.get_vol(self.ticker,spot,strike,tenor,strike_type) + self.market_tweak()
         return tweaked_vol
 
-
 class EquityMarket(dag.DomainObj):
 
     def __init__(self, ticker, market_data):
@@ -110,12 +113,11 @@ class EquityMarket(dag.DomainObj):
     def spot(self):
         return self.market_data.get_spot(self.ticker) + self.market_tweak()
 
-
 class EuropeanOption(dag.DomainObj):
 
     def __init__(self, underlying, opt_type, opt_strike, opt_maturity):
 
-        super(EuropeanOption, self).__init__()
+        super(EuropeanOption,self).__init__()
         self._name = underlying + opt_type + str(opt_strike) + str(opt_maturity) + "_" + str(self.id)
 
         if opt_type.upper() == 'CALL':
@@ -131,7 +133,7 @@ class EuropeanOption(dag.DomainObj):
         day = maturity_date.day
         month = maturity_date.month
         year = maturity_date.year
-        self.expiry = ql.Date(day, month,year)
+        self.expiry = ql.Date(day, month, year)
 
     @dag.DagMethod
     def rates_market(self):
@@ -173,89 +175,120 @@ class EuropeanOption(dag.DomainObj):
         PV = option.NPV()
         return PV
 
-
-class Book(dag.DomainObj) :
+class Position(dag.DomainObj):
 
     @dag.DagMethod
-    def positions(self):
-        return []
+    def Size(self):
+        return 0.0
+
+    @dag.DagMethod
+    def Instrument(self):
+        return None
+
+    @dag.DagMethod
+    def PV(self):
+        return self.Instrument().PV() * self.Size()
+
+
+class Portfolio (dag.DomainObj):
 
     @dag.DagMethod
     def PV(self):
         pv = 0.0
-        for p in self.positions():
-            pv += p.PV()
+
+        for p in self.Positions():
+           pv += p.PV()
 
         return pv
 
-
-class Portfolio(dag.DomainObj) :
-
     @dag.DagMethod
-    def positions(self):
+    def Positions(self):
         return []
 
-    @dag.DagMethod
-    def PV(self):
-        pv = 0.0
-        for p in self.positions():
-            pv += p.PV()
 
-        return pv
 
+
+class db(object):
+
+
+    emd = EquityMarketData()
+    omd = OptionMarketData()
+    xom_em = EquityMarket("XOM",emd)
+    xom_om = OptionsMarket("XOM",omd)
+    aapl_em = EquityMarket("AAPL",emd)
+    aapl_om = OptionsMarket("AAPL",omd)
+
+    rm = RatesMarket()
+
+    @staticmethod
+    def get(*args):
+
+        mkt = {"XOM.SPOT":db.xom_em, "XOM.OPT":db.xom_om,"AAPL.SPOT":db.aapl_em,"AAPL.OPT":db.aapl_om }
+
+        if args[0].find("MKT") == -1 :
+
+
+
+            pos = [ Position(),  Position(), Position()]
+
+
+            option1 = EuropeanOption("XOM",'put',72,'25/12/2015')
+            option1.equity_market.set_value(db.xom_em)
+            option1.options_market.set_value(db.xom_om)
+            option1.rates_market.set_value(db.rm)
+            option1.value_date.set_value(ql.Date(9,11,2015))
+
+            option2 = EuropeanOption("XOM",'call',72,'25/12/2015')
+            option2.equity_market.set_value(db.xom_em)
+            option2.options_market.set_value(db.xom_om)
+            option2.rates_market.set_value(db.rm)
+            option2.value_date.set_value(ql.Date(9,11,2015))
+
+            option3 = EuropeanOption("AAPL", 'call',9,"20/1/2016")
+            option3.equity_market.set_value(db.aapl_em)
+            option3.options_market.set_value(db.aapl_om)
+            option3.rates_market.set_value(db.rm)
+            option3.value_date.set_value(ql.Date(9,11,2015))
+
+            pos[0].Size.set_value(100)
+            pos[0].Instrument.set_value(option1)
+
+            pos[1].Size.set_value(100)
+            pos[1].Instrument.set_value(option2)
+
+            pos[2].Size.set_value(-5)
+            pos[2].Instrument.set_value(option3)
+
+            pf = Portfolio()
+            pf.Positions.set_value(pos)
+
+            return pf
+
+        else :
+            return mkt [ args[1] + "." + args[0].split(".")[2] ]
 
 
 def main():
+
+    #visualize.enable()
+
+    pf = db.get("")
+    pf.PV()
+
+
     emd = EquityMarketData()
     omd = OptionMarketData()
     em = EquityMarket("XOM",emd)
     om = OptionsMarket("XOM",omd)
-    em_a = EquityMarket("AAPL",emd)
-    om_a = OptionsMarket("AAPL",omd)
     rm = RatesMarket()
-    val_date = ql.Date(12,11,2015)
 
     option1 = EuropeanOption("XOM",'put',72,'25/12/2015')
     option1.equity_market.set_value(em)
     option1.options_market.set_value(om)
     option1.rates_market.set_value(rm)
-    option1.value_date.set_value(val_date)
+    option1.value_date.set_value(ql.Date(9,11,2015))
 
     print option1.PV()
-
-
-    option2 = EuropeanOption("XOM",'call',74,'25/03/2016')
-    option2.equity_market.set_value(em)
-    option2.options_market.set_value(om)
-    option2.rates_market.set_value(rm)
-    option2.value_date.set_value(val_date)
-
-    print option2.PV()
-
-    option3 = EuropeanOption("AAPL",'call',115,'25/01/2016')
-    option3.equity_market.set_value(em_a)
-    option3.options_market.set_value(om_a)
-    option3.rates_market.set_value(rm)
-    option3.value_date.set_value(val_date)
-
-    print option3.PV()
-
-
-    b1 = Book()
-    pos1 = [option1, option2]
-    b1.positions.set_value(pos1)
-
-    print 'Book value ' + str(b1.PV())
-
-    b2 = Book()
-    pos2 = [option2, option3]
-    b2.positions.set_value(pos2)
-
-    pf = Portfolio()
-    books = [b1,b2]
-    pf.positions.set_value(books)
-
-    print pf.PV()
 
 
     spotRange = np.linspace(-.10,.10,5)
@@ -264,20 +297,19 @@ def main():
     optionPV = []
     spot  = em.spot()
 
-    # # tweak by overriding spot/vol tweak values
-    # for j in volRange:
-    #     spotLadder = []
-    #     for i in spotRange:
-    #         em.market_tweak.set_value(spot * i)
-    #         om.market_tweak.set_value(j)
-    #         spotLadder.append( option1.PV() )
-    #     optionPV.append(spotLadder)
-    #
-    # print optionPV
+    # tweak by overriding spot/vol tweak values
+    for j in volRange:
+        spotLadder = []
+        for i in spotRange:
+            em.market_tweak.set_value(spot * i)
+            om.market_tweak.set_value(j)
+            spotLadder.append( option1.PV() )
+        optionPV.append(spotLadder)
+
+    print optionPV
 
     #clean up
-
-    # optionPV = []
+    optionPV = []
 
     #tweak the markets using context/tweaks - reprice options dependent on these markets
     for j in volRange:
@@ -287,7 +319,7 @@ def main():
             with gf.context():
                 gf.tweak( em.market_tweak,(spot * i) )
                 gf.tweak( om.market_tweak, j )
-                spotLadder.append( pf.PV())
+                spotLadder.append( option1.PV())
 
         optionPV.append(spotLadder)
 
@@ -306,9 +338,12 @@ def main():
     bumps = iter(spotRange)
     for alayer in layers:
         with alayer:
-           print "pv spot 1+%s: %s" % (next(bumps), pf.PV())
+           print "pv spot 1+%s: %s" % (next(bumps), option1.PV())
 
-
+    print
+    print "Dependency Graph (left column depends on right column)"
+    print
+    dag.print_graph_edges()
 
 if __name__ == "__main__" :
     main()
